@@ -37,6 +37,10 @@ skip-check:
   - CKV_K8S_21
   # CKV_K8S_15: imagePullPolicy Always — IfNotPresent é correto para imagens com tag fixa. ADR-0006.
   - CKV_K8S_15
+  # CKV2_AWS_62: S3 event notifications — não aplicável ao bucket de state Terraform. ADR-0002.
+  - CKV2_AWS_62
+  # CKV2_K8S_6: NetworkPolicy — deferida para Fase 2 (Kyverno ADR-0011). Workshop não tem CNI com NetworkPolicy.
+  - CKV2_K8S_6
 
 # Diretórios a excluir da análise
 skip-path:
