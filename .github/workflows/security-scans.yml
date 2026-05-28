@@ -230,22 +230,23 @@ jobs:
             -t devops-ia/frontend:scan \
             devops-ia-apps/frontend/devops-ia-platform
 
-      - name: Trivy container scan — frontend (identify CVEs)
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: devops-ia/frontend:scan
-          severity: CRITICAL
-          exit-code: "0"
-          ignore-unfixed: true
-          format: table
-          trivyignores: .trivyignore
-
       - name: Trivy container scan — frontend (CRITICAL blocks)
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: devops-ia/frontend:scan
           severity: CRITICAL
           exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          trivyignores: .trivyignore
+
+      - name: Trivy container scan — frontend (SARIF upload)
+        uses: aquasecurity/trivy-action@v0.35.0
+        if: always()
+        with:
+          image-ref: devops-ia/frontend:scan
+          severity: CRITICAL
+          exit-code: "0"
           ignore-unfixed: true
           format: sarif
           output: trivy-image-frontend.sarif
