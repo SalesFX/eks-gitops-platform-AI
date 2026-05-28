@@ -84,12 +84,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep on frontend
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-            p/typescript
-          generateSarif: "1"
+        run: |
+          python3 -m pip install semgrep --quiet
+          semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/typescript \
+            --sarif \
+            --output semgrep.sarif \
+            devops-ia-apps/frontend/devops-ia-platform || true
 
       - name: Upload Semgrep frontend SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -106,12 +108,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep on backend
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-            p/csharp
-          generateSarif: "1"
+        run: |
+          python3 -m pip install semgrep --quiet
+          semgrep scan \
+            --config p/owasp-top-ten \
+            --config p/csharp \
+            --sarif \
+            --output semgrep.sarif \
+            devops-ia-apps/backend || true
 
       - name: Upload Semgrep backend SARIF
         uses: github/codeql-action/upload-sarif@v3

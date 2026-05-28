@@ -16,6 +16,6 @@ skip-check:
   - CKV_AWS_145
 
 # Diretórios a excluir da análise
-exclude-path:
+skip-path:
   - .terraform
   - "**/.terraform/**"
