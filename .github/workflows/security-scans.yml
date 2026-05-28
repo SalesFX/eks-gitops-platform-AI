@@ -142,7 +142,7 @@ jobs:
 
       - name: Fix known vulnerabilities
         working-directory: devops-ia-apps/frontend/devops-ia-platform
-        run: npm audit fix || true
+        run: npm audit fix --force || true
 
       - name: npm audit (CRITICAL blocks, HIGH warns)
         working-directory: devops-ia-apps/frontend/devops-ia-platform
