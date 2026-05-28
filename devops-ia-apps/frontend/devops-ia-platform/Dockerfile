@@ -12,8 +12,8 @@ RUN npm run build
 FROM --platform=linux/amd64 node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 appgroup && \
-    adduser --system --uid 1001 appuser
+RUN addgroup --system --gid 10001 appgroup && \
+    adduser --system --uid 10001 appuser
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

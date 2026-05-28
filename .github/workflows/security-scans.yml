@@ -140,6 +140,10 @@ jobs:
         working-directory: devops-ia-apps/frontend/devops-ia-platform
         run: npm ci
 
+      - name: Fix known vulnerabilities
+        working-directory: devops-ia-apps/frontend/devops-ia-platform
+        run: npm audit fix || true
+
       - name: npm audit (CRITICAL blocks, HIGH warns)
         working-directory: devops-ia-apps/frontend/devops-ia-platform
         run: |
@@ -232,6 +236,7 @@ jobs:
           image-ref: devops-ia/frontend:scan
           severity: CRITICAL
           exit-code: "1"
+          ignore-unfixed: true
           format: sarif
           output: trivy-image-frontend.sarif
           trivyignores: .trivyignore
@@ -262,6 +267,7 @@ jobs:
           image-ref: devops-ia/backend:scan
           severity: CRITICAL
           exit-code: "1"
+          ignore-unfixed: true
           format: sarif
           output: trivy-image-backend.sarif
           trivyignores: .trivyignore

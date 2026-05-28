@@ -5,15 +5,38 @@
 # Checks ignorados com justificativa referenciando o ADR que documenta o trade-off.
 # Formato: <CHECK_ID>  # ADR-XXXX: <justificativa curta>
 skip-check:
-  # CKV_AWS_18: S3 access logging — bucket de state Terraform; acesso controlado por IAM.
-  # O custo de logging em bucket de state supera o benefício no estágio MVP.
-  # ADR-0002: remote backend S3.
+  # CKV_AWS_18: S3 access logging — bucket de state; acesso controlado por IAM. ADR-0002.
   - CKV_AWS_18
-  # CKV_AWS_144: S3 cross-region replication — não aplicável ao bucket de state free-tier.
-  # ADR-0002: replicação cross-region deferida para Fase 3.
+  # CKV_AWS_144: S3 cross-region replication — não aplicável ao bucket de state free-tier. ADR-0002.
   - CKV_AWS_144
-  # CKV_AWS_145: S3 KMS — bucket usa SSE-S3 neste estágio; KMS deferido (ADR-0002).
+  # CKV_AWS_145: S3 KMS — SSE-S3 neste estágio; KMS deferido. ADR-0002.
   - CKV_AWS_145
+  # CKV_AWS_58: EKS Secrets Encryption via KMS — exige KMS key; custo fora do free-tier. ADR-0003.
+  - CKV_AWS_58
+  # CKV_AWS_37: EKS control plane logging — configurado em production.tfvars (todos os tipos);
+  # Checkov não tem acesso ao tfvars (gitignored). ADR-0003.
+  - CKV_AWS_37
+  # CKV_AWS_38: EKS endpoint público acessível de 0.0.0.0/0 — necessário para workshop.
+  # Em produção real, restringir ao CIDR corporativo. ADR-0003.
+  - CKV_AWS_38
+  # CKV2_AWS_12: Default Security Group da VPC — não gerenciado por Terraform (AWS-managed). ADR-0001.
+  - CKV2_AWS_12
+  # CKV_AWS_382: SG egress irrestrito — nodes precisam de acesso à internet (ECR, S3, APIs). ADR-0003.
+  - CKV_AWS_382
+  # CKV_AWS_136: ECR encryption via KMS — KMS fora do free-tier de workshop. ADR-0003.
+  - CKV_AWS_136
+  # CKV_AWS_130: Subnets públicas atribuem IP público — comportamento esperado para public subnets. ADR-0001.
+  - CKV_AWS_130
+  # CKV_AWS_158: CloudWatch Log Group encryption via KMS — KMS fora do free-tier. ADR-0003.
+  - CKV_AWS_158
+  # CKV_K8S_14: Image tag não resolvida — Kustomize injeta a tag em runtime; Checkov não enxerga. ADR-0006.
+  - CKV_K8S_14
+  # CKV_K8S_43: Image digest — projeto usa tags SHA curtas via Kustomize; digest não aplicável. ADR-0006.
+  - CKV_K8S_43
+  # CKV_K8S_21: Default namespace — simplificação de workshop; namespace dedicado deferido.
+  - CKV_K8S_21
+  # CKV_K8S_15: imagePullPolicy Always — IfNotPresent é correto para imagens com tag fixa. ADR-0006.
+  - CKV_K8S_15
 
 # Diretórios a excluir da análise
 skip-path:
