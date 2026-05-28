@@ -12,16 +12,10 @@ resources:
 images:
 - name: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
   newName: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
-  newTag: sha-0081eb2
+  newTag: sha-1960a63
 - name: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/frontend
   newName: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/frontend
   newTag: sha-1960a63
-- name: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
-  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
-  newTag: sha-53b8e0d
-- name: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/frontend
-  newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/frontend
-  newTag: sha-2526fc7
 
 commonLabels:
   app.kubernetes.io/part-of: devops-ia
