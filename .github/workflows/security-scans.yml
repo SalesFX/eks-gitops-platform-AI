@@ -84,7 +84,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep on frontend
-        uses: returntocorp/semgrep-action@v1
+        uses: semgrep/semgrep-action@v1
         with:
           config: >-
             p/owasp-top-ten
@@ -108,7 +108,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Semgrep on backend
-        uses: returntocorp/semgrep-action@v1
+        uses: semgrep/semgrep-action@v1
         with:
           config: >-
             p/owasp-top-ten
@@ -137,17 +137,17 @@ jobs:
           node-version: "20"
 
       - name: Install frontend dependencies
-        working-directory: devops-ia-apps/frontend
+        working-directory: devops-ia-apps/frontend/devops-ia-platform
         run: npm ci
 
       - name: npm audit (CRITICAL blocks, HIGH warns)
-        working-directory: devops-ia-apps/frontend
+        working-directory: devops-ia-apps/frontend/devops-ia-platform
         run: |
           npm audit --audit-level=critical || exit 1
           npm audit --audit-level=high || echo "::warning::npm audit found HIGH vulnerabilities — review required within 7 days (ADR-0009)"
 
       - name: Trivy filesystem scan — frontend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
           scan-ref: devops-ia-apps/frontend
@@ -195,7 +195,7 @@ jobs:
           fi
 
       - name: Trivy filesystem scan — backend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
           scan-ref: devops-ia-apps/backend
@@ -224,10 +224,10 @@ jobs:
         run: |
           docker build \
             -t devops-ia/frontend:scan \
-            devops-ia-apps/frontend
+            devops-ia-apps/frontend/devops-ia-platform
 
       - name: Trivy container scan — frontend (CRITICAL blocks)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: devops-ia/frontend:scan
           severity: CRITICAL
@@ -257,7 +257,7 @@ jobs:
             devops-ia-apps/backend/DevopsIaPlatformApi
 
       - name: Trivy container scan — backend (CRITICAL blocks)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: devops-ia/backend:scan
           severity: CRITICAL
