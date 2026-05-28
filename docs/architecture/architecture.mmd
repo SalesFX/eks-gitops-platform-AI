@@ -1,0 +1,66 @@
+flowchart LR
+  %% dvn-workshop-maio — Arquitetura (conforme este repositório)
+  %% Render no GitHub/VS Code: Mermaid
+
+  Repo[(GitHub Repository<br/>code + manifests)]
+  Repo -->|push/merge| GA[GitHub Actions<br/>CI]
+
+  subgraph TF[Terraform (IaC)]
+    TF0[00-remote-backend-stack-ai<br/>S3 state (lab)]:::tf
+    TF1[01-networking-stack-ai<br/>VPC + subnets + NAT]:::tf
+    TF2[02-eks-stack-ai<br/>EKS + Node Group + addons + ECR]:::tf
+    TF3[03-ci-cd-stack-ai<br/>OIDC + IAM Role (GitHub)]:::tf
+    TF0 --> TF1 --> TF2 --> TF3
+  end
+
+  subgraph AWS[AWS Account]
+    State[(S3 Remote Backend<br/>Terraform state)]:::aws
+    TF0 --> State
+
+    OIDC[OIDC Provider<br/>GitHub → AWS]:::aws
+    Role[IAM Role<br/>(AssumeRoleWithWebIdentity)]:::aws
+    ECR[(Amazon ECR<br/>backend/frontend)]:::aws
+
+    subgraph VPC[VPC (Multi-AZ)]
+      Pub[Subnets públicas]:::net
+      Priv[Subnets privadas]:::net
+      NAT[NAT Gateway]:::net
+      Pub --- NAT
+      NAT --- Priv
+
+      subgraph EKS[EKS Cluster]
+        API[Kubernetes API]:::k8s
+        CNI[AWS VPC CNI<br/>(Prefix Delegation)]:::k8s
+        NG[Managed Node Group<br/>(Launch Template + t3.micro lab)]:::k8s
+        API --- NG
+        CNI --- NG
+
+        subgraph NS1[argocd namespace]
+          Argo[ArgoCD]:::k8s
+        end
+
+        subgraph NS2[default namespace]
+          FE[Frontend Deployment]:::k8s --> SFE[Frontend Service]:::k8s
+          BE[Backend Deployment]:::k8s --> SBE[Backend Service]:::k8s
+        end
+      end
+    end
+  end
+
+  %% CI: build + push image
+  GA -->|OIDC login| OIDC
+  OIDC --> Role
+  Role -->|push images| ECR
+
+  %% GitOps: update tags in kustomization + ArgoCD sync
+  GA -->|update image tags<br/>devops-ia-kubernetes/kustomization.yaml| Repo
+  Argo -->|sync manifests (GitOps)| Repo
+  Argo -->|apply manifests| API
+
+  %% Runtime: image pull happens on nodes/pods
+  NG -->|pods pull images| ECR
+
+  classDef tf fill:#f7fafc,stroke:#4a5568,color:#2d3748;
+  classDef aws fill:#fffaf0,stroke:#b7791f,color:#744210;
+  classDef net fill:#eef6ff,stroke:#2b6cb0,color:#1a365d;
+  classDef k8s fill:#f3f0ff,stroke:#6b46c1,color:#322659;

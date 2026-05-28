@@ -1,0 +1,20 @@
+aws_region = "us-east-1"
+
+project = {
+  name        = "devops-ia"
+  environment = "production"
+}
+
+github_actions = {
+  oidc_provider_url = "https://token.actions.githubusercontent.com"
+  github_org        = "<YOUR_GITHUB_ORG>"
+  github_repo       = "<YOUR_GITHUB_REPO>"
+  allowed_branches  = ["main"]
+  role_name         = "devops-ia-production-github-actions"
+  # ARNs gerados após aplicar 02-eks-stack-ai — use o output "ecr_repository_arns" ou construa no padrão:
+  # arn:aws:ecr:<region>:<account_id>:repository/<project>/<env>/<app>
+  ecr_repository_arns = [
+    "arn:aws:ecr:us-east-1:<YOUR_ACCOUNT_ID>:repository/devops-ia/production/backend",
+    "arn:aws:ecr:us-east-1:<YOUR_ACCOUNT_ID>:repository/devops-ia/production/frontend"
+  ]
+}

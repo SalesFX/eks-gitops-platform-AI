@@ -1,0 +1,24 @@
+# .gitleaks.toml — Configuração do Gitleaks para este repositório.
+# Referência: https://github.com/gitleaks/gitleaks#configuration
+# ADR: ADR-0009 (segurança pipeline)
+
+title = "devops-ia-platform gitleaks config"
+
+[extend]
+# Herda regras padrão do Gitleaks. Apenas adicione overrides abaixo.
+useDefault = true
+
+[allowlist]
+description = "Paths e padrões globalmente ignorados"
+paths = [
+  # Dados de teste e fixtures — nunca contêm secrets reais
+  '''^.*testdata/.*$''',
+  '''^.*fixtures/.*$''',
+  # Documentação — exemplos com valores mockados
+  '''^docs/.*\.md$''',
+]
+
+# Exemplo de regra de exceção por commit (descomentar quando necessário):
+# [[allowlist.commits]]
+# description = "Hash de commit com falso positivo conhecido"
+# commits = ["abc1234"]

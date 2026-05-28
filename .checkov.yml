@@ -1,0 +1,21 @@
+# .checkov.yml — Configuração do Checkov para este repositório.
+# Referência: https://www.checkov.io/2.Basics/CLI%20Command%20Reference.html
+# ADR: ADR-0009 (segurança pipeline)
+
+# Checks ignorados com justificativa referenciando o ADR que documenta o trade-off.
+# Formato: <CHECK_ID>  # ADR-XXXX: <justificativa curta>
+skip-check:
+  # CKV_AWS_18: S3 access logging — bucket de state Terraform; acesso controlado por IAM.
+  # O custo de logging em bucket de state supera o benefício no estágio MVP.
+  # ADR-0002: remote backend S3.
+  - CKV_AWS_18
+  # CKV_AWS_144: S3 cross-region replication — não aplicável ao bucket de state free-tier.
+  # ADR-0002: replicação cross-region deferida para Fase 3.
+  - CKV_AWS_144
+  # CKV_AWS_145: S3 KMS — bucket usa SSE-S3 neste estágio; KMS deferido (ADR-0002).
+  - CKV_AWS_145
+
+# Diretórios a excluir da análise
+exclude-path:
+  - .terraform
+  - "**/.terraform/**"

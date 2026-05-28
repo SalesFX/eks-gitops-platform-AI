@@ -1,0 +1,8 @@
+# .trivyignore — CVEs ignorados com justificativa e data de expiração.
+# Formato: <CVE-ID>  # expires: YYYY-MM-DD  <justificativa>
+#
+# Regra: toda entrada DEVE ter expires e justificativa. Entradas expiradas
+# são tratadas como não ignoradas na próxima triagem semanal (ADR-0009).
+#
+# Exemplo (descomentar quando necessário):
+# CVE-2023-XXXXX  # expires: 2026-08-27  sem fix disponível upstream; mitigado por network policy

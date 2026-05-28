@@ -1,0 +1,10 @@
+cluster = {
+  # Nome do cluster EKS provisionado pela stack 02-eks-stack-ai
+  name   = "devops-ia-production"
+  region = "us-east-1"
+}
+
+metrics_server = {
+  # Versão do chart: https://github.com/kubernetes-sigs/metrics-server/releases
+  chart_version = "3.12.2"
+}

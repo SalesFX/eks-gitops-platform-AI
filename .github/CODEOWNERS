@@ -1,0 +1,24 @@
+# CODEOWNERS — Revisores obrigatórios por área do repositório.
+# Referência: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# ADR: ADR-0009 (gate de merge), ADR-0012 (estrutura monorepo Fase 1)
+#
+# Formato: <path-pattern> <@github-username ou email>
+# A última regra que combina o path vence.
+
+# Regra global: qualquer mudança não coberta abaixo requer revisão
+* @samuel-sales
+
+# Infraestrutura Terraform — mudanças em VPC, EKS, IAM exigem revisão obrigatória
+/devops-ia-terraform/ @samuel-sales
+
+# Manifestos Kubernetes — GitOps source of truth; revisão obrigatória antes de sync
+/devops-ia-kubernetes/ @samuel-sales
+
+# Aplicações — código-fonte frontend e backend
+/devops-ia-apps/ @samuel-sales
+
+# Documentação e ADRs — decisões arquiteturais aprovadas
+/docs/ @samuel-sales
+
+# CI/CD e configurações de pipeline — mudanças de workflow exigem revisão obrigatória
+/.github/ @samuel-sales

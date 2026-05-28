@@ -1,0 +1,104 @@
+name: Security Scans — Scheduled
+
+on:
+  schedule:
+    # Diariamente às 06:00 UTC para detectar CVEs publicados após o último commit (drift).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  security-events: write
+  contents: read
+  actions: read
+
+jobs:
+  secret-scan:
+    name: Secret Scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy-repo-scan:
+    name: Trivy — Full Repository Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Trivy filesystem scan — full repo
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,config
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+          format: sarif
+          output: trivy-scheduled.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-scheduled.sarif
+          category: trivy-scheduled
+
+  iac-tf-scan:
+    name: IaC Scan — Terraform (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Run Checkov on Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: devops-ia-terraform
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-tf-scheduled.sarif
+          config_file: .checkov.yml
+          soft_fail: true
+
+      - name: Upload Checkov Terraform SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-tf-scheduled.sarif
+          category: checkov-terraform-scheduled
+
+  summary:
+    name: Scheduled Scan Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - secret-scan
+      - trivy-repo-scan
+      - iac-tf-scan
+    steps:
+      - name: Print results table
+        run: |
+          echo "## Scheduled Security Scan Results ($(date -u '+%Y-%m-%d %H:%M UTC'))" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| secret-scan (Gitleaks) | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| trivy-repo-scan (Trivy full repo) | ${{ needs.trivy-repo-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| iac-tf-scan (Checkov Terraform) | ${{ needs.iac-tf-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "New findings in this run may represent CVEs published after the last commit (drift)." >> $GITHUB_STEP_SUMMARY
+          echo "Triage HIGH findings within 7 days. See: docs/runbooks/security-findings-triage.md" >> $GITHUB_STEP_SUMMARY

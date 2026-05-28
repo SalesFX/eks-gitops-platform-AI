@@ -1,0 +1,13 @@
+aws_region = "us-east-1"
+
+project = {
+  name        = "devops-ia"
+  environment = "production"
+}
+
+backend = {
+  # O bucket é criado automaticamente com o padrão: <project>-<env>-terraform-state-<account_id>
+  # Após rodar esta stack, o nome gerado será exibido no output "state_bucket_name"
+  bucket_name                        = "devops-ia-production-terraform-state-<YOUR_ACCOUNT_ID>"
+  noncurrent_version_expiration_days = 90
+}

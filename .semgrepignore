@@ -1,0 +1,20 @@
+# .semgrepignore — Paths ignorados pelo Semgrep.
+# Referência: https://semgrep.dev/docs/ignoring-files-folders-code/
+# ADR: ADR-0009 (segurança pipeline)
+
+# Dependências e artefatos de build — nunca são código de produção
+node_modules/
+.next/
+bin/
+obj/
+dist/
+out/
+
+# Fixtures de teste — podem conter padrões que disparam regras SAST
+**/testdata/
+**/fixtures/
+**/__tests__/
+
+# Configurações geradas automaticamente
+*.min.js
+*.bundle.js

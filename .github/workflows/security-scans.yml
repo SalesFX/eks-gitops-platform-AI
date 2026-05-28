@@ -1,0 +1,310 @@
+name: Security Scans
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  security-events: write
+  contents: read
+  actions: read
+
+jobs:
+  secret-scan:
+    name: Secret Scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  iac-tf-scan:
+    name: IaC Scan — Terraform (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov on Terraform
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: devops-ia-terraform
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-tf.sarif
+          config_file: .checkov.yml
+          soft_fail: false
+
+      - name: Upload Checkov Terraform SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-tf.sarif
+          category: checkov-terraform
+
+  iac-k8s-scan:
+    name: IaC Scan — Kubernetes (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov on Kubernetes manifests
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: devops-ia-kubernetes
+          framework: kubernetes
+          output_format: sarif
+          output_file_path: checkov-k8s.sarif
+          config_file: .checkov.yml
+          soft_fail: false
+
+      - name: Upload Checkov Kubernetes SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-k8s.sarif
+          category: checkov-kubernetes
+
+  sast-frontend:
+    name: SAST — Frontend (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep on frontend
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/owasp-top-ten
+            p/typescript
+          generateSarif: "1"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload Semgrep frontend SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-frontend
+
+  sast-backend:
+    name: SAST — Backend (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep on backend
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/owasp-top-ten
+            p/csharp
+          generateSarif: "1"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload Semgrep backend SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-backend
+
+  sca-frontend:
+    name: SCA — Frontend (npm audit + Trivy fs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install frontend dependencies
+        working-directory: devops-ia-apps/frontend
+        run: npm ci
+
+      - name: npm audit (CRITICAL blocks, HIGH warns)
+        working-directory: devops-ia-apps/frontend
+        run: |
+          npm audit --audit-level=critical || exit 1
+          npm audit --audit-level=high || echo "::warning::npm audit found HIGH vulnerabilities — review required within 7 days (ADR-0009)"
+
+      - name: Trivy filesystem scan — frontend
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: devops-ia-apps/frontend
+          scanners: vuln,secret,config
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+          format: sarif
+          output: trivy-fs-frontend.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy frontend fs SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs-frontend.sarif
+          category: trivy-fs-frontend
+
+  sca-backend:
+    name: SCA — Backend (.NET audit + Trivy fs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore backend packages
+        working-directory: devops-ia-apps/backend/DevopsIaPlatformApi
+        run: dotnet restore
+
+      - name: dotnet list vulnerable packages
+        working-directory: devops-ia-apps/backend/DevopsIaPlatformApi
+        run: |
+          OUTPUT=$(dotnet list package --vulnerable --include-transitive 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "Critical"; then
+            echo "::error::CRITICAL vulnerabilities found in .NET packages. Blocking pipeline. (ADR-0009)"
+            exit 1
+          fi
+          if echo "$OUTPUT" | grep -q "High"; then
+            echo "::warning::.NET packages have HIGH vulnerabilities — review required within 7 days (ADR-0009)"
+          fi
+
+      - name: Trivy filesystem scan — backend
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: devops-ia-apps/backend
+          scanners: vuln,secret,config
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+          format: sarif
+          output: trivy-fs-backend.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy backend fs SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs-backend.sarif
+          category: trivy-fs-backend
+
+  container-frontend:
+    name: Container Scan — Frontend (Trivy image)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build frontend image for scan
+        run: |
+          docker build \
+            -t devops-ia/frontend:scan \
+            devops-ia-apps/frontend
+
+      - name: Trivy container scan — frontend (CRITICAL blocks)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: devops-ia/frontend:scan
+          severity: CRITICAL
+          exit-code: "1"
+          format: sarif
+          output: trivy-image-frontend.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy frontend image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-frontend.sarif
+          category: trivy-image-frontend
+
+  container-backend:
+    name: Container Scan — Backend (Trivy image)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend image for scan
+        run: |
+          docker build \
+            -t devops-ia/backend:scan \
+            devops-ia-apps/backend/DevopsIaPlatformApi
+
+      - name: Trivy container scan — backend (CRITICAL blocks)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: devops-ia/backend:scan
+          severity: CRITICAL
+          exit-code: "1"
+          format: sarif
+          output: trivy-image-backend.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy backend image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-backend.sarif
+          category: trivy-image-backend
+
+  summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - secret-scan
+      - iac-tf-scan
+      - iac-k8s-scan
+      - sast-frontend
+      - sast-backend
+      - sca-frontend
+      - sca-backend
+      - container-frontend
+      - container-backend
+    steps:
+      - name: Print results table
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| secret-scan (Gitleaks) | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| iac-tf-scan (Checkov Terraform) | ${{ needs.iac-tf-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| iac-k8s-scan (Checkov Kubernetes) | ${{ needs.iac-k8s-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| sast-frontend (Semgrep) | ${{ needs.sast-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| sast-backend (Semgrep) | ${{ needs.sast-backend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| sca-frontend (npm audit + Trivy fs) | ${{ needs.sca-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| sca-backend (dotnet audit + Trivy fs) | ${{ needs.sca-backend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| container-frontend (Trivy image) | ${{ needs.container-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| container-backend (Trivy image) | ${{ needs.container-backend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Findings appear in the **Security > Code scanning** tab of this repository." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Policy: CRITICAL = blocks merge | HIGH = warning (7-day SLA) | MEDIUM/LOW = SARIF only" >> $GITHUB_STEP_SUMMARY
+          echo "Reference: ADR-0009" >> $GITHUB_STEP_SUMMARY
