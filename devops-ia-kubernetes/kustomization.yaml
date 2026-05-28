@@ -12,10 +12,10 @@ resources:
 images:
 - name: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
   newName: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
-  newTag: sha-26b6a82
+  newTag: sha-0081eb2
 - name: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/frontend
   newName: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/frontend
-  newTag: sha-26b6a82
+  newTag: sha-0081eb2
 - name: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
   newName: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend
   newTag: sha-53b8e0d
