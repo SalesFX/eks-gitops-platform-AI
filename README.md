@@ -6,6 +6,46 @@ O projeto tem dois serviços de exemplo, uma API .NET e um frontend Next.js, mas
 
 ![Arquitetura](docs/architecture/architecture.png)
 
+## Screenshots
+
+### Aplicação rodando via ALB
+
+Frontend Next.js acessado pelo DNS público do ALB sem nenhum port-forward:
+
+![Frontend via ALB](docs/architecture/screenshots/alb-frontend.png)
+
+### GitOps com ArgoCD
+
+| Aplicação Synced + Healthy | Árvore de recursos |
+|---|---|
+| ![ArgoCD sync](docs/architecture/screenshots/argocd-sync.png) | ![ArgoCD árvore](docs/architecture/screenshots/argocd-arvore.png) |
+
+### Observabilidade com Grafana
+
+| Nodes (CPU, memória, disco) | Pods por namespace |
+|---|---|
+| ![Grafana nodes](docs/architecture/screenshots/grafana-nodes.png) | ![Grafana pods](docs/architecture/screenshots/grafana-pods.png) |
+
+### Cluster via kubectl
+
+| `kubectl get nodes -o wide` | `kubectl get pods -A` |
+|---|---|
+| ![Nodes](docs/architecture/screenshots/kubectl-nodes.png) | ![Pods](docs/architecture/screenshots/kubectl-pods-all.png) |
+
+| `kubectl get ingress` (DNS do ALB) | `kubectl get svc -A` |
+|---|---|
+| ![Ingress](docs/architecture/screenshots/kubectl-get-ingress.png) | ![Services](docs/architecture/screenshots/kubectl-get-svc.png) |
+
+### GitHub Actions
+
+| CI/CD (build + push) | Security Scans |
+|---|---|
+| ![Pipeline CI/CD](docs/architecture/screenshots/pipeline-cicd.png) | ![Pipeline Security](docs/architecture/screenshots/pipeline-security.png) |
+
+### Terraform state no S3
+
+![Terraform state](docs/architecture/screenshots/terraform-state.png)
+
 ## Estrutura do repositório
 
 ```
