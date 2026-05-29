@@ -340,11 +340,53 @@ O repositório foi inicialmente gerado com placeholders que precisavam ser subst
 
 ## Skills do Claude Code para este projeto
 
-Dois skills estão disponíveis para ajudar a operar este ambiente quando usado com o Claude Code:
+Este projeto foi desenvolvido com o Claude Code e inclui dois skills operacionais criados durante o processo — runbooks interativos que o Claude executa diretamente no ambiente, sem precisar que o engenheiro lembre de cada passo de diagnóstico.
 
-`/depoveiro` verifica o estado do cluster e diagnostica os problemas conhecidos desta infraestrutura: pods em CrashLoopBackOff, ImagePullBackOff, esgotamento de IPs no CNI, rolling updates travados e ArgoCD fora de sync. Use quando perceber que algo está errado no cluster ou quiser confirmar que tudo está saudável.
+### `/depoveiro` — Diagnóstico de saúde do cluster
 
-`/PlantonistaOps` é o runbook de plantão. Cobre incidentes operacionais como S3 state lock travado, state Terraform vazio após apply interrompido, node group com NodeCreationFailure por AMI deprecada (AL2 foi descontinuada em novembro de 2025), ASG preso no destroy, kubeconfig com credenciais inválidas após recreate do cluster e ArgoCD com dex-server crashando por `server.secretkey is missing`. Use quando o Terraform ou a infra não estiver se comportando como esperado.
+Verifica o estado do cluster EKS e identifica os problemas conhecidos desta infraestrutura, entregando diagnóstico e passo a passo de correção.
+
+**O que cobre:**
+- Pods em `CrashLoopBackOff`, `ImagePullBackOff` ou presos em `ContainerCreating`
+- Esgotamento de IPs no VPC CNI (sintoma recorrente em `t3.small`)
+- Rolling updates travados por PodDisruptionBudget
+- ArgoCD fora de sync ou com dex-server crashando
+- Excesso de ReplicaSets antigos acumulados no namespace
+
+**Quando usar:**
+```
+"algo está errado no cluster"
+"o pod não sobe"
+"tá tudo no ar?"
+"ArgoCD fora de sync"
+```
+
+Também pode ser invocado diretamente com `/depoveiro` no Claude Code.
+
+### `/PlantonistaOps` — Runbook de plantão (infra e Terraform)
+
+Runbook de on-call para incidentes operacionais no Terraform, EKS e ArgoCD. Cobre situações que não têm solução óbvia e onde errar a sequência de comandos pode piorar o estado.
+
+**O que cobre:**
+- S3 state lock travado após apply interrompido
+- State Terraform vazio ou corrompido
+- Node group com `NodeCreationFailure` por AMI deprecada
+- ASG preso no destroy
+- `kubeconfig` com credenciais inválidas após recreate do cluster
+- Access entry do EKS sumida (kubectl retorna `Unauthorized`)
+- ArgoCD com `dex-server` crashando por `server.secretkey is missing`
+- Pressão de memória e pods `Pending` por esgotamento de recursos no node
+
+**Quando usar:**
+```
+"terraform apply travou"
+"node group não destrói"
+"kubectl não autentica"
+"apply interrompido, state pode estar sujo"
+"ArgoCD dex-server crash"
+```
+
+Também pode ser invocado diretamente com `/PlantonistaOps` no Claude Code.
 
 ## Como seria em produção
 
