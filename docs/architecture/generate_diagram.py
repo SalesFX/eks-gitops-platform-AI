@@ -56,12 +56,16 @@ with Diagram(
     # ── Internet (fora da AWS — entidade externa) ──────────────────────────────
     users = Users("Internet")
 
-    # ── Source of truth + CI/CD ───────────────────────────────────────────────
-    repo = Github("GitHub\ncode + manifests")
-
-    with Cluster("GitHub Actions"):
-        cicd = GithubActions("ci-cd.yml\nbuild + push images")
-        sec  = GithubActions("security-scans.yml\nGitleaks · Checkov · Trivy")
+    # ── GitHub + GitHub Actions em cluster pai com rankdir=LR para garantir
+    #    que GitHub apareça à esquerda de GitHub Actions no layout final. ─────
+    with Cluster(
+        "Source + CI/CD",
+        graph_attr={"rankdir": "LR", "style": "invis"},
+    ):
+        repo = Github("GitHub\ncode + manifests")
+        with Cluster("GitHub Actions"):
+            cicd = GithubActions("ci-cd.yml\nbuild + push images")
+            sec  = GithubActions("security-scans.yml\nGitleaks · Checkov · Trivy")
 
     # ── AWS ───────────────────────────────────────────────────────────────────
     with Cluster("AWS us-east-1"):
