@@ -63,6 +63,10 @@ Configured in `.mcp.json`:
 - `docs/` — ADRs produced by the architect agent (`ADR-XXXX-title.md`)
 - `docs/implementation/` — Implementation records produced by the engineer agent (`IMPL-ADR-XXXX-YYYY-MM-DD.md`)
 
+## Writing Style
+
+Full rules in `.claude/rules/writing-style.md`. Key point: **no em-dashes (travessão "—") anywhere** — not in job names, step names, workflow names, PR titles, commit messages, or any user-visible text. Write names naturally: `Frontend SAST (Semgrep)`, not `SAST — Frontend (Semgrep)`.
+
 ## Terraform Conventions
 
 Full rules in `.claude/rules/terraform-naming-conventions.md`. Key points:

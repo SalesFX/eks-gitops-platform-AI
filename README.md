@@ -1,106 +1,202 @@
-# AWS DevOps Platform — EKS + GitOps (ArgoCD) + Terraform
+# AWS DevOps Platform: EKS + Terraform + GitOps + Observabilidade
 
-Ambiente de estudo/portfólio que provisiona uma stack completa na AWS (rede + EKS + CI/CD) e entrega aplicações no Kubernetes usando GitOps com ArgoCD.
+Projeto de portfólio que sobe uma plataforma DevOps completa na AWS usando práticas que se aproximam do que se faz em ambientes reais: infraestrutura como código com Terraform, pipeline CI/CD autenticado via OIDC sem credenciais fixas, entrega contínua via GitOps com ArgoCD e observabilidade com VictoriaMetrics e Grafana.
 
-## O que este projeto entrega (visão geral)
+O projeto tem dois serviços de exemplo, uma API .NET e um frontend Next.js, mas o foco é a plataforma em si: como as peças se conectam, por que cada ferramenta foi escolhida e como tudo funciona junto.
 
-- **Infra as Code (Terraform)**:
-  - Backend remoto (S3) para state (stack `00-remote-backend-stack-ai`);
-  - Rede (VPC multi-AZ, subnets públicas/privadas, NAT, Flow Logs) (stack `01-networking-stack-ai`);
-  - Cluster **EKS** + Node Group + Add-ons + ECR (stack `02-eks-stack-ai`);
-  - **OIDC + IAM Role** para GitHub Actions publicar imagens no ECR sem credenciais fixas (stack `03-ci-cd-stack-ai`).
-- **Aplicações (apps)**:
-  - Backend **.NET** (API) com `Dockerfile`;
-  - Frontend **Next.js** com `Dockerfile`.
-- **Kubernetes (manifests)**:
-  - Deployments/Services/PDBs para backend e frontend (via `kustomize`);
-  - **ArgoCD Application** para sincronizar o repositório (bootstrap manual).
-- **CI/CD (GitHub Actions)**:
-  - Build/push de imagens (backend e frontend) para ECR;
-  - Atualização automática de tags no `kustomization.yaml` (GitOps pattern).
-
-## Stack/tecnologias utilizadas
-
-- AWS: VPC, EKS, ECR, IAM, OIDC Provider
-- Terraform
-- Kubernetes + Kustomize
-- ArgoCD (GitOps CD)
-- GitHub Actions (CI)
-- Apps: .NET (backend) e Next.js (frontend)
+![Arquitetura](docs/architecture/architecture.png)
 
 ## Estrutura do repositório
 
-- `devops-ia-terraform/`
-  - `00-remote-backend-stack-ai/` — S3 para state (laboratório)
-  - `01-networking-stack-ai/` — VPC + subnets + NAT + flow logs
-  - `02-eks-stack-ai/` — EKS + node groups + addons + ECR
-  - `03-ci-cd-stack-ai/` — OIDC + IAM Role/policies para GitHub Actions
-- `devops-ia-kubernetes/`
-  - `kustomization.yaml` — base GitOps (imagens/tags e resources)
-  - `backend/` e `frontend/` — manifests (Deployment/Service/PDB)
-  - `argocd-application.yaml` — Application do ArgoCD (bootstrap)
-- `devops-ia-apps/`
-  - `backend/DevopsIaPlatformApi/` — API .NET + `Dockerfile`
-  - `frontend/devops-ia-platform/` — Next.js + `Dockerfile`
-- `docs/` — ADRs e registros de implementação (decisões e justificativas)
+```
+devops-ia-terraform/         Stacks Terraform (uma por camada de infra)
+  00-remote-backend-stack-ai   S3 para o state remoto
+  01-networking-stack-ai       VPC, subnets, NAT Gateway, Flow Logs
+  02-eks-stack-ai              EKS, Node Group, addons (CoreDNS, kube-proxy, VPC CNI), ECR
+  03-ci-cd-stack-ai            OIDC Provider + IAM Role para o GitHub Actions
+  04-addons-stack-ai           Metrics Server + AWS Load Balancer Controller (Helm + IRSA)
 
-## Pré-requisitos
+devops-ia-kubernetes/        Manifestos Kubernetes (gerenciados pelo ArgoCD via kustomize)
+  backend/                     Deployment, Service (ClusterIP), PodDisruptionBudget
+  frontend/                    Deployment, Service (ClusterIP), PodDisruptionBudget
+  ingress.yaml                 ALB Ingress: / -> frontend, /backend -> backend
+  monitoring/                  Helm values do VictoriaMetrics k8s stack
+  kustomization.yaml           Base do GitOps: referencia recursos e sobrescreve tags de imagem
+  argocd-application.yaml      ArgoCD Application (aplicado uma vez no bootstrap)
 
-- AWS CLI configurada (perfil/credenciais)
+devops-ia-apps/              Código-fonte das aplicações
+  backend/                     API .NET com Dockerfile multi-stage
+  frontend/                    Next.js com Dockerfile multi-stage
+
+.github/workflows/           GitHub Actions
+  ci-cd.yml                    Build e push de imagens, atualização de tags no kustomize
+  security-scans.yml           Gitleaks + Checkov em cada push
+  security-scheduled.yml       Mesmos scans rodando diariamente por agendamento
+
+docs/                        ADRs e registros de implementação
+```
+
+## Infraestrutura como código
+
+Cada stack Terraform é um diretório independente com seu próprio state remoto no S3. Elas são aplicadas em sequência porque dependem umas das outras via `terraform_remote_state`.
+
+A stack `00-remote-backend-stack-ai` cria o bucket S3 e a tabela DynamoDB para lock. As demais stacks apontam para esse backend. Não existe `terraform.tfvars` no repositório, os valores ficam em `envs/production.tfvars` dentro de cada stack.
+
+Quando o projeto foi criado, o backend do S3 existia, mas os arquivos `versions.tf` de algumas stacks ainda tinham o placeholder `<YOUR_ACCOUNT_ID>` no endereço do bucket. Esse tipo de detalhe é fácil de passar despercebido, e foi uma das primeiras correções necessárias quando o projeto foi retomado.
+
+## Configuração do cluster
+
+O cluster se chama `devops-ia-production` e fica na região `us-east-1`. Usa EKS 1.32 com um Managed Node Group de instâncias `t3.small` (2 GiB RAM cada), AMI `AL2023_x86_64_STANDARD`.
+
+O cluster roda com 4 nodes distribuídos em três zonas de disponibilidade (`us-east-1a`, `us-east-1b`, `us-east-1c`). O mínimo configurado é 1 node, máximo 4 e o desired atual é 3 no tfvars (mas 4 estão rodando na AWS após um scaling manual que ficou fora do Terraform, ver seção de problemas).
+
+A VPC tem subnets públicas e privadas em três AZs, NAT Gateway e Flow Logs habilitados. Os nodes ficam nas subnets privadas e o plano de controle do EKS é gerenciado pela AWS.
+
+O VPC CNI do EKS limita os IPs disponíveis por node. Em `t3.small` o limite é de 9 IPs para pods (3 ENIs com 4 IPs secundários cada, menos os 3 IPs primários usados pela ENI). Para aumentar esse limite sem trocar de instância, a configuração do kubelet via `nodeadm` define `maxPods: 110`, o que depende de prefix delegation no CNI para funcionar. Isso está documentado no `ADR-0003`.
+
+## CI/CD
+
+O pipeline de CI/CD usa três workflows:
+
+`ci-cd.yml` detecta mudanças em `devops-ia-apps/` e constrói apenas as imagens que mudaram, backend ou frontend, usando jobs paralelos com `needs`. Após o build e push para o ECR, um job final faz um commit no próprio repositório atualizando as tags no `devops-ia-kubernetes/kustomization.yaml`. Esse commit é o que dispara o ArgoCD a sincronizar.
+
+A autenticação com a AWS usa OIDC, sem credenciais fixas no repositório. O GitHub Actions assume uma IAM Role via `AssumeRoleWithWebIdentity`, e a role só pode ser assumida por tokens originados deste repositório específico. A stack `03-ci-cd-stack-ai` cria o OIDC Provider e a Role com as policies necessárias para publicar no ECR.
+
+`security-scans.yml` roda dois scanners em todo push: Gitleaks para detectar credenciais acidentalmente commitadas, e Checkov para varrer os manifestos Kubernetes e o código Terraform procurando configurações inseguras.
+
+`security-scheduled.yml` repete os mesmos scans do security-scans.yml por agendamento diário, garantindo que qualquer mudança nos bancos de regras dos scanners seja aplicada mesmo sem novos commits.
+
+## Observabilidade
+
+O monitoramento usa a stack **VictoriaMetrics k8s stack** instalada via Helm no namespace `monitoring`. A escolha foi pelo VictoriaMetrics ao invés do kube-prometheus-stack por ser mais leve em memória, o que faz diferença em nodes `t3.small`.
+
+Os componentes rodando são:
+
+- `vmsingle`: armazena as métricas. Neste ambiente usa um PersistentVolume do tipo `hostPath` porque o cluster não tem o EBS CSI Driver instalado. Isso significa que se o pod for reagendado para um node diferente, o histórico de métricas é perdido. Em produção usaria EBS via CSI Driver.
+- `vmagent`: faz o scraping de métricas do cluster (pods, nodes, kube-state-metrics) e envia para o vmsingle.
+- `grafana`: dashboards. Roda com memória limitada a 512 MiB porque o Grafana 13 não sobe com menos que isso em `t3.small` (entrava em OOMKilled com 384 MiB).
+- `kube-state-metrics`: expõe métricas sobre o estado dos objetos Kubernetes (deployments, pods, nodes).
+- `prometheus-node-exporter`: expõe métricas de hardware e sistema operacional dos nodes.
+
+O datasource do Grafana aponta para o vmsingle usando o tipo prometheus (compatível). O plugin nativo do VictoriaMetrics `victoriametrics-metrics-datasource` está instalado mas não configurado como datasource porque causou erros ao tentar instalar via ConfigMap pré-provisionado do chart.
+
+## Ingress com AWS Load Balancer Controller
+
+A stack `04-addons-stack-ai` instala o **AWS Load Balancer Controller** via Helm com autenticação IRSA (IAM Role for Service Account). O controller cria um Application Load Balancer real na AWS a partir do `Ingress` definido em `devops-ia-kubernetes/ingress.yaml`.
+
+O roteamento é baseado em path:
+
+- `/*` vai para o frontend (porta 3000)
+- `/backend/*` vai para o backend (porta 8080)
+
+Os serviços de frontend e backend usam `type: ClusterIP` porque o ALB roteia diretamente para os IPs dos pods via `target-type: ip`, sem passar pelo NodePort. As subnets públicas têm a tag `kubernetes.io/role/elb = "1"` para que o controller consiga fazer a auto-descoberta e associar o ALB às subnets corretas.
+
+O ALB é criado automaticamente pelo controller quando o `Ingress` é aplicado pelo ArgoCD. Para pegar o DNS do ALB:
+
+```bash
+kubectl get ingress -n default
+```
+
+## Como acessar os serviços
+
+### Via ALB (acesso externo)
+
+Após o ArgoCD sincronizar o `Ingress`, o ALB fica disponível pelo DNS que o controller atribui:
+
+```bash
+kubectl get ingress devops-ia-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+| Caminho | Serviço |
+|---|---|
+| `http://<alb-dns>/` | Frontend |
+| `http://<alb-dns>/backend/swagger` | Backend Swagger |
+
+### Via port-forward (acesso local)
+
+Para acessar Grafana e ArgoCD, use o script na raiz do projeto:
+
+```bash
+bash port-forward.sh
+```
+
+Ele inicia port-forwards para todos os serviços com loop de auto-reconexão (se um pod reiniciar, o forward retoma automaticamente depois de 2 segundos):
+
+| Serviço | Endereço local | Credenciais |
+|---|---|---|
+| Frontend | http://localhost:3000 | |
+| Backend (Swagger) | http://localhost:8080/backend/swagger | |
+| Grafana | http://localhost:3001 | admin / devops-ia-2026 |
+| ArgoCD | https://localhost:8443 | admin / (ver secret no cluster) |
+
+## Do zero ao ar
+
+### Pré-requisitos
+
+- AWS CLI configurada com permissões para criar VPC, EKS, IAM, S3, ECR
 - Terraform instalado
-- `kubectl` instalado
-- (Opcional) `argocd` CLI
-- Permissões na AWS para criar os recursos (VPC/EKS/ECR/IAM/S3)
+- kubectl instalado
 
-## Passo a passo (do zero ao deploy via GitOps)
-
-### 0) Ajustes iniciais
-
-1. Confira variáveis e valores de ambiente em:
-   - `devops-ia-terraform/**/envs/production.tfvars`
-2. Valide se o `.gitignore` está respeitando arquivos locais do Terraform (ver seção “Terraform State”).
-
-### 1) (Opcional, recomendado) Backend remoto do Terraform (state)
-
-Objetivo: armazenar o state fora da máquina local (padrão profissional).
+### 1. Backend remoto
 
 ```bash
 cd devops-ia-terraform/00-remote-backend-stack-ai
 terraform init
-terraform plan -var-file="envs/production.tfvars"
 terraform apply -var-file="envs/production.tfvars"
 ```
 
-Depois, configure os demais stacks para apontarem para o backend remoto (S3 + lock) conforme seu padrão/organização.
-
-### 2) Provisionar rede (VPC)
+### 2. Rede
 
 ```bash
 cd devops-ia-terraform/01-networking-stack-ai
 terraform init
-terraform plan -var-file="envs/production.tfvars"
 terraform apply -var-file="envs/production.tfvars"
 ```
 
-### 3) Provisionar EKS + ECR
+### 3. EKS e ECR
 
 ```bash
 cd devops-ia-terraform/02-eks-stack-ai
 terraform init
-terraform plan -var-file="envs/production.tfvars"
 terraform apply -var-file="envs/production.tfvars"
 ```
 
-Configure o `kubectl`:
+Depois do apply, configure o kubectl:
 
 ```bash
 aws eks update-kubeconfig --name devops-ia-production --region us-east-1
 kubectl get nodes
 ```
 
-### 4) Instalar ArgoCD (bootstrap manual)
+### 4. OIDC e IAM para o CI
 
-O `argocd-application.yaml` é aplicado **uma única vez** (bootstrap). Ele não fica dentro do `kustomization.yaml` para evitar um loop de “ArgoCD gerenciando seu próprio Application” (o que pode causar deleções/recriações indesejadas).
+```bash
+cd devops-ia-terraform/03-ci-cd-stack-ai
+terraform init
+terraform apply -var-file="envs/production.tfvars"
+```
+
+No GitHub, crie a variável de repositório `AWS_ROLE_ARN` com o ARN da role que o output do Terraform retornar.
+
+### 5. Addons: Metrics Server e AWS Load Balancer Controller
+
+```bash
+cd devops-ia-terraform/04-addons-stack-ai
+terraform init
+terraform apply -var-file="envs/production.tfvars"
+```
+
+Isso instala o Metrics Server (necessário para `kubectl top` e HPA) e o AWS Load Balancer Controller. O controller precisa de uma IAM Role com IRSA — o Terraform cria a role e o Helm chart já configura o ServiceAccount com a anotação correta.
+
+Após o apply, confirme que o controller está rodando:
+
+```bash
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+```
+
+### 6. ArgoCD
+
+O ArgoCD não está no kustomize para evitar que ele gerencie a si mesmo. É instalado uma única vez via bootstrap:
 
 ```bash
 kubectl create namespace argocd
@@ -112,140 +208,135 @@ kubectl wait --for=condition=Ready pods --all -n argocd --timeout=300s
 kubectl apply -f devops-ia-kubernetes/argocd-application.yaml
 ```
 
-Acesso local (UI):
+A senha inicial do admin está no secret `argocd-initial-admin-secret`. Após o bootstrap, o ArgoCD sincroniza o repositório automaticamente e sobe as aplicações.
+
+### 7. Monitoramento
+
+O VictoriaMetrics é instalado pelo próprio ArgoCD via Helm, mas o PersistentVolume precisa ser criado manualmente porque não há EBS CSI Driver no cluster:
 
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath="{.data.password}" | base64 -d
-
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vmsingle-hostpath
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /tmp/vmsingle-data
+  claimRef:
+    namespace: monitoring
+    name: vmsingle-victoria-metrics-victoria-metrics-k8s-stack
+EOF
 ```
 
-### 5) Habilitar CI/CD com GitHub Actions (OIDC → ECR)
+## Problemas que encontramos durante o projeto
 
-Provisione OIDC e IAM Role para o GitHub Actions:
+Este projeto não foi uma instalação limpa do zero. Surgiram vários problemas que vale documentar porque mostram situações reais que acontecem em clusters EKS.
 
-```bash
-cd devops-ia-terraform/03-ci-cd-stack-ai
-terraform init
-terraform plan -var-file="envs/production.tfvars"
-terraform apply -var-file="envs/production.tfvars"
-```
+**Esgotamento de IPs no VPC CNI (t3.small)**
 
-No GitHub do repositório, crie a variável (não é segredo) em:
-`Settings → Secrets and variables → Actions → Variables`
+O maior problema recorrente foi o VPC CNI ficar sem IPs disponíveis em um node. O `t3.small` tem limite de 9 IPs para pods, e quando ArgoCD, kube-system e os serviços da aplicação se concentram no mesmo node, esse limite é atingido. O sintoma é pod ficando em `ContainerCreating` com evento `failed to assign an IP address to container`.
 
-- Nome: `AWS_ROLE_ARN`
-- Valor: ARN da role criada (output do Terraform)
+A solução imediata é fazer `cordon` no node saturado, deletar os pods travados para que sejam reagendados em outros nodes, e depois `uncordon`. Isso está documentado em detalhe na skill `/depoveiro`.
 
-O workflow fica em `/.github/workflows/ci-cd.yml` e:
-- builda/pusha imagens para ECR quando houver mudanças em `devops-ia-apps/`;
-- atualiza as tags no `devops-ia-kubernetes/kustomization.yaml`;
-- o ArgoCD sincroniza e aplica no cluster.
+**Scaling event causando dezenas de pods Pending**
 
-### 6) Primeiro deploy (validação ponta a ponta)
+Quando o cluster foi escalado de 2 para 4 nodes, os novos nodes entraram mas o VPC CNI ainda estava inicializando o pool de IPs. O scheduler agendou uma dezena de pods em dois dos nodes antes deles estarem prontos para atribuir IPs, e todos ficaram `Pending`. A solução foi a mesma: cordon dos nodes saturados, delete em massa dos pods Pending, uncordon. Isso ficou documentado como Padrão E na skill `/depoveiro`.
 
-1. Faça um commit alterando backend ou frontend em `devops-ia-apps/`;
-2. Confirme a execução do workflow no GitHub Actions;
-3. Valide se o `kustomization.yaml` foi atualizado com novas tags;
-4. Valide no ArgoCD (UI) o sync e rollout no cluster.
+**Rolling update do node group travado por PDB**
 
-## Observações sobre este ambiente (lab/free tier)
+Ao tentar mudar `desired_size` de 2 para 3 via Terraform ao mesmo tempo que outra propriedade do Launch Template, o Terraform iniciou um rolling update completo. O rolling update precisava drenar um node, mas os dois pods de backend estavam no mesmo node, e o PodDisruptionBudget com `minAvailable: 1` bloqueava a drenagem porque remover qualquer dos dois pods deixaria zero running.
 
-Este projeto foi criado como ambiente de estudo/portfólio usando créditos AWS/Free Tier.
+A saída foi usar `aws eks update-nodegroup-config` diretamente para só aumentar o scaling sem substituir os nodes, que não dispara rolling update.
 
-Por esse motivo, o cluster EKS utiliza instâncias pequenas, como `t3.micro`, para reduzir custo. Esse tipo de instância possui limitação baixa de pods por node devido ao limite de ENIs/IPs da AWS.
+**Grafana com OOMKilled**
 
-Para permitir a execução de workloads como ArgoCD, foi habilitado:
+O Grafana 13 não ficava estável com 384 MiB de limite de memória. Depois de alguns minutos recebia OOMKilled. Aumentar para 512 MiB resolveu. Isso foi ajustado nos `values.yaml` do chart.
 
-- Prefix Delegation no AWS VPC CNI;
-- Launch Template customizado no Node Group;
-- bootstrap customizado do kubelet com `--use-max-pods false`;
-- ajuste de `--max-pods=110`.
+**Datasource do VictoriaMetrics não carregando**
 
-Essa configuração é aceitável para laboratório, estudo e demonstração técnica, mas não representa necessariamente a configuração ideal para produção.
+A stack VictoriaMetrics k8s configura dois datasources no Grafana via ConfigMap. Um deles usa o tipo `victoriametrics-metrics-datasource`, um plugin não assinado que precisa de permissão explícita no `grafana.ini`. O plugin estava instalado mas a configuração de `allow_loading_unsigned_plugins` não estava sendo aplicada corretamente via Helm. A solução foi remover a entrada com o tipo proprietário do ConfigMap e usar apenas o datasource com tipo `prometheus`, que é compatível com o VictoriaMetrics.
+
+**Placeholder `<YOUR_ACCOUNT_ID>` no código**
+
+O repositório foi inicialmente gerado com placeholders que precisavam ser substituídos pelo ID real da conta AWS. Algumas stacks Terraform tinham esse placeholder no endereço do bucket S3 do backend, o que causava erros na inicialização do Terraform até ser corrigido.
+
+## Skills do Claude Code para este projeto
+
+Dois skills estão disponíveis para ajudar a operar este ambiente quando usado com o Claude Code:
+
+`/depoveiro` verifica o estado do cluster e diagnostica os problemas conhecidos desta infraestrutura: pods em CrashLoopBackOff, ImagePullBackOff, esgotamento de IPs no CNI, rolling updates travados e ArgoCD fora de sync. Use quando perceber que algo está errado no cluster ou quiser confirmar que tudo está saudável.
+
+`/PlantonistaOps` é o runbook de plantão. Cobre incidentes operacionais como S3 state lock travado, state Terraform vazio após apply interrompido, node group com NodeCreationFailure por AMI deprecada (AL2 foi descontinuada em novembro de 2025), ASG preso no destroy, kubeconfig com credenciais inválidas após recreate do cluster e ArgoCD com dex-server crashando por `server.secretkey is missing`. Use quando o Terraform ou a infra não estiver se comportando como esperado.
 
 ## Como seria em produção
 
-Em produção, a recomendação seria:
+Este ambiente usa várias simplificações que não seriam aceitáveis em produção. As principais diferenças:
 
-- usar instâncias maiores e adequadas ao workload;
-- definir `requests` e `limits` de CPU/memória;
-- usar Cluster Autoscaler ou Karpenter;
-- separar node groups por tipo de workload;
-- usar múltiplas AZs;
-- configurar monitoramento com Prometheus/Grafana/CloudWatch;
-- controlar acesso via IAM Roles/OIDC;
-- usar backend remoto para Terraform com lock;
-- evitar credenciais fixas, preferindo OIDC no GitHub Actions;
-- aplicar políticas de segurança, network policies e revisão de permissões IAM.
+Os nodes `t3.small` são suficientes para laboratório, mas em produção a escolha de instância seria guiada pelo perfil de carga dos workloads. Para aplicações Java ou ML o mínimo seria `m5.large` ou `m5.xlarge`. Node groups separados por tipo de workload (nodes de sistema vs. nodes de aplicação) evitam que pods de kube-system e de aplicação compitam por recursos no mesmo node.
 
-O uso de `t3.micro` neste projeto é uma escolha consciente para reduzir custo em ambiente de estudo.
+O PersistentVolume do VictoriaMetrics usa `hostPath`, o que significa que os dados são perdidos se o pod for reagendado. Em produção se usaria EBS via EBS CSI Driver, que o EKS instala como addon: `aws_eks_addon` com `addon_name = "aws-ebs-csi-driver"` e a role do node precisa ter a policy `AmazonEBSCSIDriverPolicy` anexada.
 
-## Terraform State
+O cluster não tem Cluster Autoscaler ou Karpenter. Em produção o Karpenter seria a escolha: ele provisiona nodes em segundos baseado nas demandas dos pods, seleciona o tipo de instância mais eficiente para cada carga e elimina o overhead de gerenciar node groups manualmente.
 
-O state do Terraform não deve ser versionado no Git.
+Secrets e configurações sensíveis estão em valores fixos no repositório (passwords do Grafana e ArgoCD). Em produção usaria AWS Secrets Manager ou SSM Parameter Store com External Secrets Operator para injetar os valores nos pods sem que fiquem expostos em manifests ou values.yaml.
 
-Arquivos como estes devem permanecer fora do repositório:
+A retenção de métricas está configurada para 7 dias por limitação de armazenamento. Em produção 30 dias seria o mínimo para diagnóstico de incidentes, e dependendo da regulamentação poderia ser necessário reter por mais tempo.
 
-- `.terraform/`
-- `*.tfstate`
-- `*.tfstate.*`
-- `terraform.tfvars`
+## Decisões de arquitetura
 
-Em ambiente real, o state deve ser armazenado em backend remoto, como S3 com lock habilitado.
+Cada decisão relevante tem um ADR (Architecture Decision Record) em `docs/`:
 
-## Decisões de arquitetura (ADRs)
+| ADR | Assunto |
+|---|---|
+| ADR-0001 | VPC multi-AZ com subnets públicas e privadas |
+| ADR-0002 | Backend remoto S3 para o state do Terraform |
+| ADR-0003 | Cluster EKS e configuração do node group |
+| ADR-0004 | OIDC Provider e IAM Role para GitHub Actions |
+| ADR-0005 | Pipeline CI/CD com GitHub Actions |
+| ADR-0006 | ArgoCD e padrão GitOps |
+| ADR-0007 | Observabilidade com VictoriaMetrics e Grafana |
+| ADR-0009 | Segurança no pipeline com scans automatizados |
+| ADR-0010 | Estratégia de rollback e recovery |
+| ADR-0011 | Ingress com AWS Load Balancer Controller e IRSA |
 
-As decisões e justificativas do projeto estão documentadas em `docs/`:
+## Arquitetura
 
-- `docs/ADR-0001-networking-stack-vpc-multi-az.md`
-- `docs/ADR-0002-remote-backend.md`
-- `docs/ADR-0003-eks-cluster.md`
-- `docs/ADR-0004-oidc-provider-iam-roles-github-aws.md`
-- `docs/ADR-0005-pipeline-github-actions-ci-cd.md`
-- `docs/ADR-0006-argocd-gitops-deployment.md`
+O diagrama principal está em `docs/architecture/architecture.drawio` (formato draw.io). Para editar ou exportar como PNG, abra em [diagrams.net](https://diagrams.net) ou no plugin do VS Code.
 
-## Arquitetura (diagrama + screenshots)
+O arquivo `docs/architecture/architecture.mmd` contém a versão Mermaid do diagrama para referência rápida. Para renderizar:
 
-- Diagrama (fonte Mermaid): `docs/architecture/architecture.mmd`
-- Diagrama (PNG): `docs/architecture/architecture.png`
-- Sugestão de screenshots (cole aqui e referencie no README):
-  - `docs/architecture/screenshots/argocd-ui.png`
-  - `docs/architecture/screenshots/kubectl-get-pods.png`
-  - `docs/architecture/screenshots/kubectl-get-svc.png`
+```bash
+mmdc -i docs/architecture/architecture.mmd -o docs/architecture/architecture.png
+```
 
-![Arquitetura — Terraform + EKS + GitOps (ArgoCD)](docs/architecture/architecture.png)
+Ou colar o conteúdo em [mermaid.live](https://mermaid.live).
 
-### Como ler o diagrama
+### Como funciona o fluxo
 
-- **GitHub Repository (apps + manifests)**: código em `devops-ia-apps/` e manifests em `devops-ia-kubernetes/`.
-- **GitHub Actions (CI)**: ao fazer `push/merge`, o workflow em `.github/workflows/ci-cd.yml` executa build e publicação.
-- **OIDC Provider → IAM Role**: o Actions autentica na AWS via OIDC e assume uma role com credenciais temporárias (stack `devops-ia-terraform/03-ci-cd-stack-ai/`).
-- **Amazon ECR**: o Actions faz **push** das imagens no ECR (repositórios criados no stack `devops-ia-terraform/02-eks-stack-ai/`).
-- **Commit atualizando tags (kustomize)**: o pipeline atualiza `devops-ia-kubernetes/kustomization.yaml` com as novas tags e commita no repositório (padrão GitOps).
-- **ArgoCD**: sincroniza os manifests do Git e aplica no cluster via Kubernetes API.
-- **Managed Node Group (Launch Template + t3.micro lab)**: nodes do EKS executam os workloads; aqui ficam os ajustes de laboratório (Prefix Delegation/max-pods).
-- **Pull de imagens (pods/nodes → ECR)**: quem puxa as imagens do ECR são os nodes/pods quando os Deployments são aplicados/atualizados (o ArgoCD não “puxa imagem”, ele aplica manifests).
+O desenvolvedor faz push para o repositório. O GitHub Actions detecta quais aplicações mudaram, constrói as imagens Docker e publica no ECR. Para autenticar na AWS, o Actions assume uma IAM Role via OIDC sem nenhuma credencial armazenada. Após o push, o pipeline faz um commit atualizando as tags de imagem no `kustomization.yaml`.
 
-### Evidências (ambiente rodando)
+O ArgoCD monitora o repositório a cada 3 minutos. Quando detecta uma mudança no `kustomization.yaml`, aplica os manifestos no cluster via Kubernetes API. Os pods recebem as novas imagens diretamente do ECR, e o Deployment executa um rolling update garantindo zero downtime.
 
-#### ArgoCD (GitOps)
+O vmagent coleta métricas de todos os pods, nodes e objetos Kubernetes e envia para o vmsingle. O Grafana consulta o vmsingle e exibe os dashboards.
 
-![ArgoCD — Sync/Health](docs/architecture/screenshots/argocd-sync.png)
+## Screenshots
 
-![ArgoCD — Árvore de recursos](docs/architecture/screenshots/argocd-arvore.png)
+Para documentar o ambiente funcionando, salve os prints na pasta `docs/architecture/screenshots/` com estes nomes:
 
-#### Workloads (Kubernetes)
-
-![kubectl — Pods](docs/architecture/screenshots/kubectl-pods-A.png)
-
-![kubectl — Services](docs/architecture/screenshots/kubectl-get-svc.png)
-
-![Backend](docs/architecture/screenshots/backend.png)
-
-![Frontend](docs/architecture/screenshots/frontend.png)
-
-#### CI/CD
-
-![Pipeline](docs/architecture/screenshots/pipeline.png)
+| Arquivo | O que capturar |
+|---|---|
+| `argocd-sync.png` | Tela principal do ArgoCD mostrando a aplicação Synced + Healthy |
+| `argocd-arvore.png` | Árvore de recursos do ArgoCD expandida (deployments, pods, services) |
+| `grafana-nodes.png` | Dashboard de nodes no Grafana com CPU, memória e disco |
+| `grafana-pods.png` | Dashboard de pods/containers com uso de recursos por namespace |
+| `kubectl-pods-all.png` | Terminal com `kubectl get pods -A` mostrando todos os pods Running |
+| `kubectl-nodes.png` | Terminal com `kubectl get nodes -o wide` mostrando os 4 nodes |
+| `frontend.png` | Frontend rodando no browser em localhost:3000 |
+| `backend.png` | Swagger do backend em localhost:8080/backend/swagger |
+| `pipeline.png` | Workflow do GitHub Actions com os jobs de build finalizados com sucesso |
+| `security-scan.png` | Resultado do Gitleaks e Checkov mostrando 0 findings críticos |

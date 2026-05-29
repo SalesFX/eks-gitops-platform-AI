@@ -29,7 +29,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   iac-tf-scan:
-    name: IaC Scan — Terraform (Checkov)
+    name: Terraform IaC Scan (Checkov)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -53,7 +53,7 @@ jobs:
           category: checkov-terraform
 
   iac-k8s-scan:
-    name: IaC Scan — Kubernetes (Checkov)
+    name: Kubernetes IaC Scan (Checkov)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -77,7 +77,7 @@ jobs:
           category: checkov-kubernetes
 
   sast-frontend:
-    name: SAST — Frontend (Semgrep)
+    name: Frontend SAST (Semgrep)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -101,7 +101,7 @@ jobs:
           category: semgrep-frontend
 
   sast-backend:
-    name: SAST — Backend (Semgrep)
+    name: Backend SAST (Semgrep)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -125,7 +125,7 @@ jobs:
           category: semgrep-backend
 
   sca-frontend:
-    name: SCA — Frontend (npm audit + Trivy fs)
+    name: Frontend SCA (npm audit + Trivy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -148,9 +148,9 @@ jobs:
         working-directory: devops-ia-apps/frontend/devops-ia-platform
         run: |
           npm audit --audit-level=critical || exit 1
-          npm audit --audit-level=high || echo "::warning::npm audit found HIGH vulnerabilities — review required within 7 days (ADR-0009)"
+          npm audit --audit-level=high || echo "::warning::npm audit found HIGH vulnerabilities, review required within 7 days (ADR-0009)"
 
-      - name: Trivy filesystem scan — frontend
+      - name: Trivy filesystem scan on frontend
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
@@ -170,7 +170,7 @@ jobs:
           category: trivy-fs-frontend
 
   sca-backend:
-    name: SCA — Backend (.NET audit + Trivy fs)
+    name: Backend SCA (.NET audit + Trivy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -195,10 +195,10 @@ jobs:
             exit 1
           fi
           if echo "$OUTPUT" | grep -q "High"; then
-            echo "::warning::.NET packages have HIGH vulnerabilities — review required within 7 days (ADR-0009)"
+            echo "::warning::.NET packages have HIGH vulnerabilities, review required within 7 days (ADR-0009)"
           fi
 
-      - name: Trivy filesystem scan — backend
+      - name: Trivy filesystem scan on backend
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
@@ -218,7 +218,7 @@ jobs:
           category: trivy-fs-backend
 
   container-frontend:
-    name: Container Scan — Frontend (Trivy image)
+    name: Frontend Container Scan (Trivy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -230,7 +230,7 @@ jobs:
             -t devops-ia/frontend:scan \
             devops-ia-apps/frontend/devops-ia-platform
 
-      - name: Trivy container scan — frontend (CRITICAL blocks)
+      - name: Trivy container scan frontend CRITICAL
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: devops-ia/frontend:scan
@@ -240,7 +240,7 @@ jobs:
           format: table
           trivyignores: .trivyignore
 
-      - name: Trivy container scan — frontend (SARIF upload)
+      - name: Trivy container scan frontend SARIF
         uses: aquasecurity/trivy-action@v0.35.0
         if: always()
         with:
@@ -260,7 +260,7 @@ jobs:
           category: trivy-image-frontend
 
   container-backend:
-    name: Container Scan — Backend (Trivy image)
+    name: Backend Container Scan (Trivy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -272,7 +272,7 @@ jobs:
             -t devops-ia/backend:scan \
             devops-ia-apps/backend/DevopsIaPlatformApi
 
-      - name: Trivy container scan — backend (CRITICAL blocks)
+      - name: Trivy container scan backend CRITICAL
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: devops-ia/backend:scan

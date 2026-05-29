@@ -21,9 +21,9 @@ description: |
 |---|---|
 | Cluster EKS | `devops-ia-production` |
 | Região | `us-east-1` |
-| Conta AWS | `<YOUR_ACCOUNT_ID>` |
-| Bucket Terraform State | `<YOUR_STATE_BUCKET>` |
-| IAM Admin User | `arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>` |
+| Conta AWS | `074994084847` |
+| Bucket Terraform State | `devops-ia-production-terraform-state-074994084847` |
+| IAM Admin User | `arn:aws:iam::074994084847:user/adm-user` |
 | Raiz das Stacks | `/home/lustrabits/DevOps-Nuvem/eks-terraform-cicd-monitoring-001/devops-ia-terraform/` |
 | Tipo de Node | `t3.small` (2 GiB RAM), AL2023 |
 | AMI Type | `AL2023_x86_64_STANDARD` |
@@ -74,13 +74,13 @@ de lock no S3 não foi removido automaticamente.
 
 **Diagnóstico:**
 ```bash
-aws s3 ls s3://<YOUR_STATE_BUCKET>/ --recursive | grep tflock
+aws s3 ls s3://devops-ia-production-terraform-state-074994084847/ --recursive | grep tflock
 ```
 
 **Fix:**
 ```bash
 # Substitua <stack-prefix> pelo prefixo correto (ex: eks, networking, ci-cd, addons)
-aws s3 rm s3://<YOUR_STATE_BUCKET>/<stack-prefix>/terraform.tfstate.tflock
+aws s3 rm s3://devops-ia-production-terraform-state-074994084847/<stack-prefix>/terraform.tfstate.tflock
 ```
 
 Prefixos por stack:
@@ -177,11 +177,11 @@ terraform import $VF aws_eks_addon.vpc_cni devops-ia-production:vpc-cni
 
 # Access entry
 terraform import $VF \
-  'aws_eks_access_entry.admin["arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>"]' \
-  'devops-ia-production:arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>'
+  'aws_eks_access_entry.admin["arn:aws:iam::074994084847:user/adm-user"]' \
+  'devops-ia-production:arn:aws:iam::074994084847:user/adm-user'
 terraform import $VF \
-  'aws_eks_access_policy_association.admin["arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>"]' \
-  'devops-ia-production#arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>#arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy'
+  'aws_eks_access_policy_association.admin["arn:aws:iam::074994084847:user/adm-user"]' \
+  'devops-ia-production#arn:aws:iam::074994084847:user/adm-user#arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy'
 ```
 
 **Verificação:**
@@ -346,12 +346,12 @@ terraform apply -auto-approve -var-file="envs/production.tfvars"
 ```bash
 aws eks create-access-entry \
   --cluster-name devops-ia-production \
-  --principal-arn arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER> \
+  --principal-arn arn:aws:iam::074994084847:user/adm-user \
   --region us-east-1
 
 aws eks associate-access-policy \
   --cluster-name devops-ia-production \
-  --principal-arn arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER> \
+  --principal-arn arn:aws:iam::074994084847:user/adm-user \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --access-scope type=cluster \
   --region us-east-1
@@ -360,12 +360,12 @@ aws eks associate-access-policy \
 Após fix via CLI, importar para o state para evitar drift:
 ```bash
 terraform import -var-file="envs/production.tfvars" \
-  'aws_eks_access_entry.admin["arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>"]' \
-  'devops-ia-production:arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>'
+  'aws_eks_access_entry.admin["arn:aws:iam::074994084847:user/adm-user"]' \
+  'devops-ia-production:arn:aws:iam::074994084847:user/adm-user'
 
 terraform import -var-file="envs/production.tfvars" \
-  'aws_eks_access_policy_association.admin["arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>"]' \
-  'devops-ia-production#arn:aws:iam::<YOUR_ACCOUNT_ID>:user/<YOUR_IAM_USER>#arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy'
+  'aws_eks_access_policy_association.admin["arn:aws:iam::074994084847:user/adm-user"]' \
+  'devops-ia-production#arn:aws:iam::074994084847:user/adm-user#arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy'
 ```
 
 **Verificação:**

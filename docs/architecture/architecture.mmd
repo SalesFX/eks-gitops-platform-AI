@@ -1,15 +1,15 @@
 flowchart LR
-  %% dvn-workshop-maio — Arquitetura (conforme este repositório)
-  %% Render no GitHub/VS Code: Mermaid
+  %% devops-ia-production: Arquitetura atual
+  %% Render: mermaid.live ou mmdc
 
   Repo[(GitHub Repository<br/>code + manifests)]
-  Repo -->|push/merge| GA[GitHub Actions<br/>CI]
+  Repo -->|push/merge| GA[GitHub Actions CI]
 
-  subgraph TF[Terraform (IaC)]
-    TF0[00-remote-backend-stack-ai<br/>S3 state (lab)]:::tf
+  subgraph TF[Terraform IaC]
+    TF0[00-remote-backend-stack-ai<br/>S3 state]:::tf
     TF1[01-networking-stack-ai<br/>VPC + subnets + NAT]:::tf
-    TF2[02-eks-stack-ai<br/>EKS + Node Group + addons + ECR]:::tf
-    TF3[03-ci-cd-stack-ai<br/>OIDC + IAM Role (GitHub)]:::tf
+    TF2[02-eks-stack-ai<br/>EKS + Node Group + ECR]:::tf
+    TF3[03-ci-cd-stack-ai<br/>OIDC + IAM Role]:::tf
     TF0 --> TF1 --> TF2 --> TF3
   end
 
@@ -17,50 +17,67 @@ flowchart LR
     State[(S3 Remote Backend<br/>Terraform state)]:::aws
     TF0 --> State
 
-    OIDC[OIDC Provider<br/>GitHub → AWS]:::aws
-    Role[IAM Role<br/>(AssumeRoleWithWebIdentity)]:::aws
-    ECR[(Amazon ECR<br/>backend/frontend)]:::aws
+    OIDC[OIDC Provider<br/>GitHub to AWS]:::aws
+    Role[IAM Role<br/>AssumeRoleWithWebIdentity]:::aws
+    ECR[(Amazon ECR<br/>backend + frontend)]:::aws
 
-    subgraph VPC[VPC (Multi-AZ)]
-      Pub[Subnets públicas]:::net
+    subgraph VPC[VPC Multi-AZ us-east-1]
+      Pub[Subnets publicas]:::net
       Priv[Subnets privadas]:::net
       NAT[NAT Gateway]:::net
       Pub --- NAT
       NAT --- Priv
 
-      subgraph EKS[EKS Cluster]
+      subgraph EKS[EKS Cluster 1.32]
         API[Kubernetes API]:::k8s
-        CNI[AWS VPC CNI<br/>(Prefix Delegation)]:::k8s
-        NG[Managed Node Group<br/>(Launch Template + t3.micro lab)]:::k8s
+        CNI[AWS VPC CNI]:::k8s
+        NG[Managed Node Group<br/>t3.small 4 nodes AL2023]:::k8s
         API --- NG
         CNI --- NG
 
-        subgraph NS1[argocd namespace]
+        subgraph NS_ARGOCD[namespace argocd]
           Argo[ArgoCD]:::k8s
         end
 
-        subgraph NS2[default namespace]
-          FE[Frontend Deployment]:::k8s --> SFE[Frontend Service]:::k8s
-          BE[Backend Deployment]:::k8s --> SBE[Backend Service]:::k8s
+        subgraph NS_DEFAULT[namespace default]
+          FE[Frontend 2 replicas]:::k8s --> SFE[svc/frontend]:::k8s
+          BE[Backend 2 replicas]:::k8s --> SBE[svc/backend]:::k8s
+        end
+
+        subgraph NS_MONITORING[namespace monitoring]
+          VM[vmsingle VictoriaMetrics]:::obs
+          VMA[vmagent scraper]:::obs
+          GF[Grafana]:::obs
+          KSM[kube-state-metrics]:::obs
+          NE[node-exporter DaemonSet]:::obs
+          VMA -->|remote_write| VM
+          GF -->|query| VM
+          KSM -->|metrics| VMA
+          NE -->|metrics| VMA
         end
       end
     end
   end
 
-  %% CI: build + push image
+  %% CI
   GA -->|OIDC login| OIDC
   OIDC --> Role
   Role -->|push images| ECR
 
-  %% GitOps: update tags in kustomization + ArgoCD sync
-  GA -->|update image tags<br/>devops-ia-kubernetes/kustomization.yaml| Repo
-  Argo -->|sync manifests (GitOps)| Repo
+  %% GitOps
+  GA -->|commit update image tags| Repo
+  Argo -->|poll manifests| Repo
   Argo -->|apply manifests| API
 
-  %% Runtime: image pull happens on nodes/pods
+  %% Runtime
   NG -->|pods pull images| ECR
+
+  %% Monitoring scrape
+  VMA -.->|scrape| NS_DEFAULT
+  VMA -.->|scrape| NS_ARGOCD
 
   classDef tf fill:#f7fafc,stroke:#4a5568,color:#2d3748;
   classDef aws fill:#fffaf0,stroke:#b7791f,color:#744210;
   classDef net fill:#eef6ff,stroke:#2b6cb0,color:#1a365d;
   classDef k8s fill:#f3f0ff,stroke:#6b46c1,color:#322659;
+  classDef obs fill:#f0fff4,stroke:#276749,color:#1c4532;

@@ -1,4 +1,4 @@
-name: Security Scans — Scheduled
+name: Scheduled Security Scans
 
 on:
   schedule:
@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   trivy-repo-scan:
-    name: Trivy — Full Repository Scan
+    name: Full Repository Scan (Trivy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,7 +36,7 @@ jobs:
         with:
           ref: main
 
-      - name: Trivy filesystem scan — full repo
+      - name: Trivy filesystem scan on full repo
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
@@ -56,7 +56,7 @@ jobs:
           category: trivy-scheduled
 
   iac-tf-scan:
-    name: IaC Scan — Terraform (Checkov)
+    name: Terraform IaC Scan (Checkov)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
