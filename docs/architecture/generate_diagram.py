@@ -69,7 +69,7 @@ with Diagram(
     with Cluster("VPC Multi-AZ  (AWS us-east-1)"):
         alb = ALB("ALB\ninternet-facing")
 
-        with Cluster("EKS Cluster 1.32  |  t3.small x4  |  AL2023"):
+        with Cluster("EKS Cluster 1.32  |  t3.small x3  |  AL2023"):
 
             with Cluster("kube-system"):
                 lbc = EKS("AWS Load Balancer\nController")

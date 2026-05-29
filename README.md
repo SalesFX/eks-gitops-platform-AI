@@ -88,7 +88,7 @@ Quando o projeto foi criado, o backend do S3 existia, mas os arquivos `versions.
 
 O cluster se chama `devops-ia-production` e fica na região `us-east-1`. Usa EKS 1.32 com um Managed Node Group de instâncias `t3.small` (2 GiB RAM cada), AMI `AL2023_x86_64_STANDARD`.
 
-O cluster roda com 4 nodes distribuídos em três zonas de disponibilidade (`us-east-1a`, `us-east-1b`, `us-east-1c`). O mínimo configurado é 1 node, máximo 4 e o desired atual é 3 no tfvars (mas 4 estão rodando na AWS após um scaling manual que ficou fora do Terraform, ver seção de problemas).
+O cluster roda com 3 nodes distribuídos em três zonas de disponibilidade (`us-east-1a`, `us-east-1b`, `us-east-1c`). O mínimo configurado é 1 node, máximo 4 e o desired é 3.
 
 A VPC tem subnets públicas e privadas em três AZs, NAT Gateway e Flow Logs habilitados. Os nodes ficam nas subnets privadas e o plano de controle do EKS é gerenciado pela AWS.
 
