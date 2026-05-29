@@ -15,7 +15,7 @@ provider "aws" {
 data "terraform_remote_state" "networking" {
   backend = "s3"
   config = {
-    bucket = "devops-ia-production-terraform-state-<YOUR_ACCOUNT_ID>"
+    bucket = "devops-ia-production-terraform-state-074994084847"
     key    = "networking/terraform.tfstate"
     region = "us-east-1"
   }

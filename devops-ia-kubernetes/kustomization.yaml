@@ -8,6 +8,7 @@ resources:
 - frontend/deployment.yaml
 - frontend/service.yaml
 - frontend/pdb.yaml
+- ingress.yaml
 
 images:
 - name: 074994084847.dkr.ecr.us-east-1.amazonaws.com/devops-ia/production/backend

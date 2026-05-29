@@ -14,3 +14,20 @@ variable "metrics_server" {
   })
   nullable = false
 }
+
+variable "project" {
+  description = "Configurações do projeto para composição de nomes de recursos."
+  type = object({
+    name        = string
+    environment = string
+  })
+  nullable = false
+}
+
+variable "aws_lbc" {
+  description = "Configurações do Helm release do AWS Load Balancer Controller."
+  type = object({
+    chart_version = string
+  })
+  nullable = false
+}
