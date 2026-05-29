@@ -339,15 +339,13 @@ Cada decisão relevante tem um ADR (Architecture Decision Record) em `docs/`:
 
 ## Arquitetura
 
-O diagrama principal está em `docs/architecture/architecture.drawio` (formato draw.io). Para editar ou exportar como PNG, abra em [diagrams.net](https://diagrams.net) ou no plugin do VS Code.
-
-O arquivo `docs/architecture/architecture.mmd` contém a versão Mermaid do diagrama para referência rápida. Para renderizar:
+O diagrama no topo deste README é gerado com a biblioteca [diagrams](https://diagrams.mingrammer.com/). Para regenerar:
 
 ```bash
-mmdc -i docs/architecture/architecture.mmd -o docs/architecture/architecture.png
+python3 docs/architecture/generate_diagram.py
 ```
 
-Ou colar o conteúdo em [mermaid.live](https://mermaid.live).
+Versões alternativas também disponíveis: `architecture.drawio` (draw.io) e `architecture.mmd` (Mermaid).
 
 ### Como funciona o fluxo
 
