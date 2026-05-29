@@ -192,6 +192,9 @@ terraform.rc
 .DS_Store
 **/.DS_Store
 
+# Local notes (not for git)
+SCREENSHOTS.md
+
 # Claude / local files
 .claude/scheduled_tasks.lock
 .claude/agent-memory/

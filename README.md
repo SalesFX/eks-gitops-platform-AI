@@ -357,19 +357,3 @@ O ArgoCD monitora o repositório a cada 3 minutos. Quando detecta uma mudança n
 
 O vmagent coleta métricas de todos os pods, nodes e objetos Kubernetes e envia para o vmsingle. O Grafana consulta o vmsingle e exibe os dashboards.
 
-## Screenshots
-
-Para documentar o ambiente funcionando, salve os prints na pasta `docs/architecture/screenshots/` com estes nomes:
-
-| Arquivo | O que capturar |
-|---|---|
-| `argocd-sync.png` | Tela principal do ArgoCD mostrando a aplicação Synced + Healthy |
-| `argocd-arvore.png` | Árvore de recursos do ArgoCD expandida (deployments, pods, services) |
-| `grafana-nodes.png` | Dashboard de nodes no Grafana com CPU, memória e disco |
-| `grafana-pods.png` | Dashboard de pods/containers com uso de recursos por namespace |
-| `kubectl-pods-all.png` | Terminal com `kubectl get pods -A` mostrando todos os pods Running |
-| `kubectl-nodes.png` | Terminal com `kubectl get nodes -o wide` mostrando os 4 nodes |
-| `frontend.png` | Frontend rodando no browser em localhost:3000 |
-| `backend.png` | Swagger do backend em localhost:8080/backend/swagger |
-| `pipeline.png` | Workflow do GitHub Actions com os jobs de build finalizados com sucesso |
-| `security-scan.png` | Resultado do Gitleaks e Checkov mostrando 0 findings críticos |
