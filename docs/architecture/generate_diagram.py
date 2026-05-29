@@ -15,6 +15,7 @@ from diagrams.onprem.iac import Terraform
 from diagrams.onprem.monitoring import Grafana, Prometheus
 from diagrams.onprem.client import Users
 from diagrams.k8s.compute import Deployment
+from diagrams.k8s.network import Ingress
 
 OUTPUT = str(Path(__file__).parent / "architecture")
 
@@ -44,8 +45,7 @@ with Diagram(
     direction="TB",
 ):
     # ── Terraform IaC (provisionamento) ───────────────────────────────────────
-    # Declarados em ordem reversa: graphviz inverte a ordem de declaracao no
-    # layout LR-dentro-de-TB, entao declarar 04..00 resulta em 00..04 na tela.
+    # Declarados em ordem reversa: graphviz inverte no layout TB.
     with Cluster("Terraform IaC (provisionamento)"):
         tf4 = Terraform("04\naddons + LBC")
         tf3 = Terraform("03\nci-cd + OIDC")
@@ -78,33 +78,43 @@ with Diagram(
                     argo = Argocd("ArgoCD")
 
                 with Cluster("default"):
-                    fe = Deployment("Frontend\n2 replicas")
-                    be = Deployment("Backend .NET\n2 replicas")
+                    ing = Ingress("Ingress")
+                    fe  = Deployment("Frontend\n2 replicas")
+                    be  = Deployment("Backend .NET\n2 replicas")
 
                 with Cluster("monitoring"):
                     vmagent  = Prometheus("vmagent")
                     vmsingle = Prometheus("vmsingle")
                     grafana  = Grafana("Grafana")
 
-    # ── Push -> build -> deploy ───────────────────────────────────────────────
+    # ── Push -> build -> ECR ──────────────────────────────────────────────────
     repo >> Edge(color="#444444") >> cicd
     cicd >> Edge(label="OIDC", color="#d6b656") >> iam
     iam  >> Edge(color="#d6b656", constraint="false") >> ecr
 
-    # ── GitOps ────────────────────────────────────────────────────────────────
+    # ── GitOps: ArgoCD polls GitHub e aplica manifests ────────────────────────
+    repo >> Edge(
+        style="dashed", color="#9673a6",
+        label="GitOps manifests", constraint="false",
+    ) >> argo
     argo >> Edge(color="#9673a6") >> fe
     argo >> Edge(color="#9673a6") >> be
 
-    # ── Image pull (nao afeta layout) ─────────────────────────────────────────
+    # ── Image pull ────────────────────────────────────────────────────────────
     ecr >> Edge(style="dashed", color="#aaaaaa", constraint="false") >> fe
     ecr >> Edge(style="dashed", color="#aaaaaa", constraint="false") >> be
 
-    # ── Acesso externo via ALB ────────────────────────────────────────────────
-    users >> Edge(color="#4488cc") >> alb
-    lbc   >> Edge(label="manages", style="dashed", color="#d6b656", constraint="false") >> alb
-    alb   >> Edge(color="#82b366") >> fe
-    alb   >> Edge(color="#82b366") >> be
+    # ── LBC cria o ALB a partir do recurso Ingress ────────────────────────────
+    lbc >> Edge(
+        label="creates", style="dashed", color="#d6b656", constraint="false",
+    ) >> alb
 
-    # ── Monitoring (constraint=false para manter nos dentro do cluster) ────────
+    # ── Trafego externo: Internet -> ALB -> Ingress -> apps ───────────────────
+    users >> Edge(color="#4488cc") >> alb
+    alb   >> Edge(color="#82b366") >> ing
+    ing   >> Edge(color="#82b366") >> fe
+    ing   >> Edge(color="#82b366") >> be
+
+    # ── Monitoring ────────────────────────────────────────────────────────────
     vmagent  >> Edge(color="#ae4132", constraint="false") >> vmsingle
     vmsingle >> Edge(color="#ae4132", constraint="false") >> grafana
