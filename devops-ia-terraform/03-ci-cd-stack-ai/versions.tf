@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.10.0"
 
   backend "s3" {
-    bucket       = "devops-ia-production-terraform-state-<YOUR_ACCOUNT_ID>"
+    bucket       = "devops-ia-production-terraform-state-074994084847"
     key          = "ci-cd/terraform.tfstate"
     region       = "us-east-1"
     use_lockfile = true
