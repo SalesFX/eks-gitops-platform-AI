@@ -56,15 +56,48 @@ O VPC CNI do EKS limita os IPs disponíveis por node. Em `t3.small` o limite é 
 
 ## CI/CD
 
-O pipeline de CI/CD usa três workflows:
+O repositório tem três workflows no `.github/workflows/`.
 
-`ci-cd.yml` detecta mudanças em `devops-ia-apps/` e constrói apenas as imagens que mudaram, backend ou frontend, usando jobs paralelos com `needs`. Após o build e push para o ECR, um job final faz um commit no próprio repositório atualizando as tags no `devops-ia-kubernetes/kustomization.yaml`. Esse commit é o que dispara o ArgoCD a sincronizar.
+### `ci-cd.yml` — build e entrega contínua
 
-A autenticação com a AWS usa OIDC, sem credenciais fixas no repositório. O GitHub Actions assume uma IAM Role via `AssumeRoleWithWebIdentity`, e a role só pode ser assumida por tokens originados deste repositório específico. A stack `03-ci-cd-stack-ai` cria o OIDC Provider e a Role com as policies necessárias para publicar no ECR.
+Roda em todo push para `main` que altere arquivos em `devops-ia-apps/`. Só constrói o que mudou — se só o backend mudou, o frontend não é reconstruído.
 
-`security-scans.yml` roda dois scanners em todo push: Gitleaks para detectar credenciais acidentalmente commitadas, e Checkov para varrer os manifestos Kubernetes e o código Terraform procurando configurações inseguras.
+| Job | O que faz |
+|---|---|
+| **detect-changes** | Usa `paths` filter para identificar quais apps mudaram e setar flags (`backend-changed`, `frontend-changed`) que os jobs seguintes consultam via `needs` |
+| **build-backend** | Login no ECR via OIDC (sem credenciais fixas), `docker build` da API .NET, `docker push` para o ECR com tag `sha-<commit>` |
+| **build-frontend** | Mesma sequência para o Next.js |
+| **update-kustomization** | Atualiza as tags de imagem no `devops-ia-kubernetes/kustomization.yaml` e faz um commit de volta no repositório. Esse commit dispara o ArgoCD a sincronizar o cluster. |
 
-`security-scheduled.yml` repete os mesmos scans do security-scans.yml por agendamento diário, garantindo que qualquer mudança nos bancos de regras dos scanners seja aplicada mesmo sem novos commits.
+A autenticação usa OIDC: o Actions assume uma IAM Role via `AssumeRoleWithWebIdentity` sem nenhuma chave de acesso armazenada. A trust policy da role restringe o acesso a tokens gerados especificamente por este repositório.
+
+### `security-scans.yml` — scans em todo push e PR
+
+Roda em paralelo com o CI/CD em todo push para `main` e em qualquer PR aberto contra `main`. Todos os jobs fazem upload de resultados no formato SARIF para o GitHub Code Scanning (aba Security do repositório).
+
+| Job | Ferramenta | O que verifica | Critério de bloqueio |
+|---|---|---|---|
+| **Secret Scan (Gitleaks)** | Gitleaks | Varre todo o histórico de commits buscando tokens, chaves e senhas expostos acidentalmente | Qualquer achado bloqueia |
+| **Terraform IaC Scan (Checkov)** | Checkov | Analisa os arquivos `.tf` buscando má configuração: buckets S3 sem criptografia, security groups abertos, logs desabilitados, etc. | CRITICAL bloqueia |
+| **Kubernetes IaC Scan (Checkov)** | Checkov | Analisa os manifestos Kubernetes: containers rodando como root, sem `readOnlyRootFilesystem`, sem resource limits, sem liveness probe, etc. | CRITICAL bloqueia |
+| **Frontend SAST (Semgrep)** | Semgrep | Análise estática do código TypeScript/Next.js com regras OWASP Top 10 e padrões de segurança para TypeScript | Findings viram anotações no PR |
+| **Backend SAST (Semgrep)** | Semgrep | Mesma análise para o código C#/.NET com ruleset OWASP Top 10 e C# específico | Findings viram anotações no PR |
+| **Frontend SCA (npm audit + Trivy)** | npm audit + Trivy | Verifica vulnerabilidades nas dependências npm. Trivy também escaneia o filesystem por segredos e arquivos de configuração inseguros | CRITICAL bloqueia, HIGH gera warning (SLA 7 dias) |
+| **Backend SCA (.NET audit + Trivy)** | dotnet list + Trivy | Mesma verificação para pacotes NuGet | CRITICAL bloqueia, HIGH gera warning |
+| **Frontend Container Scan (Trivy)** | Trivy | Constrói a imagem Docker do frontend e escaneia camadas, pacotes OS e bibliotecas da imagem final | CRITICAL bloqueia o merge |
+| **Backend Container Scan (Trivy)** | Trivy | Mesma coisa para a imagem do backend | CRITICAL bloqueia o merge |
+| **Security Scan Summary** | — | Job final que consolida o resultado de todos os jobs no GitHub Step Summary da execução | Sempre roda (`if: always()`) |
+
+### `security-scheduled.yml` — varredura diária
+
+Roda todo dia às 06:00 UTC independente de haver novos commits. O objetivo é detectar CVEs publicados após o último commit (drift de vulnerabilidade): uma dependência pode estar segura hoje e ter uma CVE descoberta amanhã sem que ninguém faça push.
+
+| Job | O que faz |
+|---|---|
+| **Secret Scan (Gitleaks)** | Mesma varredura de segredos, rodando no estado atual do `main` |
+| **Full Repository Scan (Trivy)** | Trivy escaneia todo o repositório (`scan-ref: .`) por vulnerabilidades, segredos e configurações inseguras |
+| **Terraform IaC Scan (Checkov)** | Mesma análise do código Terraform, com `soft_fail: true` para não bloquear (é um scan de auditoria, não de gate) |
+| **Scheduled Scan Summary** | Consolida os resultados com timestamp no Step Summary |
 
 ## Observabilidade
 
