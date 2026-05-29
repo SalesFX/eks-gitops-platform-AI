@@ -53,6 +53,9 @@ with Diagram(
         tf1 = Terraform("01\nnetworking")
         tf0 = Terraform("00\nremote-backend")
 
+    # ── Internet (fora da AWS — entidade externa) ──────────────────────────────
+    users = Users("Internet")
+
     # ── Source of truth + CI/CD ───────────────────────────────────────────────
     repo = Github("GitHub\ncode + manifests")
 
@@ -66,23 +69,22 @@ with Diagram(
         ecr = EC2ContainerRegistry("Amazon ECR\nbackend + frontend")
 
         with Cluster("VPC Multi-AZ"):
-            users = Users("Internet")
-            alb   = ALB("ALB\ninternet-facing")
+            alb = ALB("ALB\ninternet-facing")
 
             with Cluster("EKS Cluster 1.32  |  t3.small x4  |  AL2023"):
 
                 with Cluster("kube-system"):
                     lbc = EKS("AWS Load Balancer\nController")
 
-                with Cluster("argocd"):
+                with Cluster("namespace: argocd"):
                     argo = Argocd("ArgoCD")
 
-                with Cluster("default"):
+                with Cluster("namespace: default"):
                     ing = Ingress("Ingress")
                     fe  = Deployment("Frontend\n2 replicas")
                     be  = Deployment("Backend .NET\n2 replicas")
 
-                with Cluster("monitoring"):
+                with Cluster("namespace: monitoring"):
                     vmagent  = Prometheus("vmagent")
                     vmsingle = Prometheus("vmsingle")
                     grafana  = Grafana("Grafana")
@@ -92,13 +94,16 @@ with Diagram(
     cicd >> Edge(label="OIDC", color="#d6b656") >> iam
     iam  >> Edge(color="#d6b656", constraint="false") >> ecr
 
-    # ── GitOps: ArgoCD polls GitHub e aplica manifests ────────────────────────
+    # ── GitOps: GitHub -> ArgoCD (fluxo principal do portfolio) ───────────────
     repo >> Edge(
-        style="dashed", color="#9673a6",
-        label="GitOps manifests", constraint="false",
+        color="#6a3d9a",
+        penwidth="2.5",
+        label="GitOps manifests",
+        constraint="false",
     ) >> argo
-    argo >> Edge(color="#9673a6") >> fe
-    argo >> Edge(color="#9673a6") >> be
+    argo >> Edge(color="#9673a6", penwidth="1.5") >> ing
+    argo >> Edge(color="#9673a6", penwidth="1.5") >> fe
+    argo >> Edge(color="#9673a6", penwidth="1.5") >> be
 
     # ── Image pull ────────────────────────────────────────────────────────────
     ecr >> Edge(style="dashed", color="#aaaaaa", constraint="false") >> fe
@@ -110,8 +115,8 @@ with Diagram(
     ) >> alb
 
     # ── Trafego externo: Internet -> ALB -> Ingress -> apps ───────────────────
-    users >> Edge(color="#4488cc") >> alb
-    alb   >> Edge(color="#82b366") >> ing
+    users >> Edge(color="#4488cc", penwidth="1.5") >> alb
+    alb   >> Edge(color="#4488cc", penwidth="1.5") >> ing
     ing   >> Edge(color="#82b366") >> fe
     ing   >> Edge(color="#82b366") >> be
 
